@@ -41,7 +41,6 @@ Verify at: quantum.ibm.com/jobs
 Go to quantum.ibm.com → Account settings → copy your API token
 
 **Step 2** — Open the notebook in Google Colab
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/fdodelap/quantum-encryption-demo/blob/main/quantum_encryption_aexa.ipynb)
 
 **Step 3** — Run cells top to bottom
 Paste your IBM token in Cell 2, change the message in Cell 7, run all.
@@ -99,7 +98,7 @@ that will power that system.
 
 ---
 
-## About Aexa Tech
+## About Aexa 
 
 Aexa Aerospace LLC builds holographic AI presence platforms
 and quantum-safe communication infrastructure.
@@ -107,4 +106,4 @@ and quantum-safe communication infrastructure.
 Led the world's first holoportation in space — October 2021,
 ISS, in partnership with NASA and ESA.
 
-aexa.tech | github.com/fdodelap
+aexa.com | github.com/fdodelap
