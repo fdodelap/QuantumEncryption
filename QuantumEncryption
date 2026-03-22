@@ -1,0 +1,251 @@
+# This notebook encrypts text using a real IBM quantum computer.
+# Built by Dr. Fernando De La Peña Llaca — Aexa Tech
+# Date: March 2026
+
+# Cell 1 - Install Packages
+
+!pip install qiskit qiskit-aer qiskit-ibm-runtime cryptography -q
+print("✅ All packages installed!")
+
+# Cell 2 - Save your IBM token
+
+from qiskit_ibm_runtime import QiskitRuntimeService
+
+QiskitRuntimeService.save_account(
+    channel="ibm_quantum_platform",
+    token="ADD YOUR IBM QUANTUM TOKEN HERE",
+    overwrite=True,
+    set_as_default=True
+)
+print("✅ Token saved! Delete this cell now.")
+
+#Cell 3 - Connect to Quantum Computer
+
+from qiskit import QuantumCircuit
+from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+import time
+
+service = QiskitRuntimeService()
+backend = service.least_busy(operational=True, simulator=False)
+
+print(f"✅ Connected to IBM Quantum!")
+print(f"   Machine : {backend.name}")
+print(f"   Qubits  : {backend.num_qubits}")
+print(f"   Queue   : {backend.status().pending_jobs} jobs waiting")
+
+#Cell 4 - Define your secrete gate key
+
+QUANTUM_GATE_KEY = [
+    ('h', 0),
+    ('x', 0),
+    ('z', 0),
+    ('h', 0),
+    ('s', 0),
+    ('h', 0),
+    ('x', 0),
+    ('h', 0),
+]
+
+gate_names = {
+    'h': 'Hadamard  — superposition',
+    'x': 'Pauli-X   — bit flip',
+    'z': 'Pauli-Z   — phase flip',
+    's': 'S gate    — 90 degree phase',
+    't': 'T gate    — 45 degree phase'
+}
+
+print("=" * 50)
+print("YOUR SECRET QUANTUM GATE KEY")
+print("=" * 50)
+for i, (gate, _) in enumerate(QUANTUM_GATE_KEY):
+    print(f"  Step {i+1}: [{gate.upper()}] {gate_names[gate]}")
+print("=" * 50)
+print(f"Key length: {len(QUANTUM_GATE_KEY)} quantum gate operations")
+
+#Cell 5 - Encryption Function
+def quantum_encrypt(text, gate_key, backend, max_chars=4):
+    print("=" * 55)
+    print("  QUANTUM ENCRYPTION on", backend.name)
+    print("=" * 55)
+
+    bits = []
+    for char in text[:max_chars]:
+        byte = ord(char)
+        for i in range(7, -1, -1):
+            bits.append((byte >> i) & 1)
+
+    print(f"  Text    : \"{text[:max_chars]}\"")
+    print(f"  Bits    : {''.join(map(str, bits))}")
+    print(f"  Qubits  : {len(bits)}")
+    print()
+
+    circuits = []
+    for bit in bits:
+        qc = QuantumCircuit(1, 1)
+        if bit == 1:
+            qc.x(0)
+        qc.barrier()
+        for gate, _ in gate_key:
+            if   gate == 'h': qc.h(0)
+            elif gate == 'x': qc.x(0)
+            elif gate == 'z': qc.z(0)
+            elif gate == 's': qc.s(0)
+            elif gate == 't': qc.t(0)
+        qc.barrier()
+        qc.measure(0, 0)
+        circuits.append(qc)
+
+    print(f"  Sending {len(circuits)} qubits to {backend.name}...")
+    pm      = generate_preset_pass_manager(backend=backend, optimization_level=1)
+    sampler = Sampler(backend)
+    job     = sampler.run(pm.run(circuits), shots=3)
+    print(f"  Job ID : {job.job_id()}")
+    print(f"  Waiting...")
+
+    start   = time.time()
+    result  = job.result()
+    elapsed = round(time.time() - start, 1)
+    print(f"  Done in {elapsed}s on real quantum hardware!")
+    print()
+
+    encrypted_bits = []
+    for pub_result in result:
+        counts = pub_result.data.c.get_counts()
+        encrypted_bits.append(int(max(counts, key=counts.get)))
+
+    enc_str = ''.join(map(str, encrypted_bits))
+    enc_hex = hex(int(enc_str, 2))
+
+    print(f"  Original bits  : {''.join(map(str, bits))}")
+    print(f"  Encrypted bits : {enc_str}")
+    print(f"  Encrypted hex  : {enc_hex}")
+    print()
+    print(f"  Encryption complete! Job: {job.job_id()}")
+    print("=" * 55)
+
+    return encrypted_bits, bits, job.job_id()
+
+print("✅ Encryption function ready!")
+
+#Cell 6- Decryption function
+
+def quantum_decrypt(encrypted_bits, gate_key, backend):
+    print("=" * 55)
+    print("  QUANTUM DECRYPTION on", backend.name)
+    print("=" * 55)
+
+    inverse_key = list(reversed(gate_key))
+
+    circuits = []
+    for bit in encrypted_bits:
+        qc = QuantumCircuit(1, 1)
+        if bit == 1:
+            qc.x(0)
+        qc.barrier()
+        for gate, _ in inverse_key:
+            if   gate == 'h': qc.h(0)
+            elif gate == 'x': qc.x(0)
+            elif gate == 'z': qc.z(0)
+            elif gate == 's': qc.sdg(0)
+            elif gate == 't': qc.tdg(0)
+        qc.barrier()
+        qc.measure(0, 0)
+        circuits.append(qc)
+
+    print(f"  Sending {len(circuits)} qubits to {backend.name}...")
+    pm      = generate_preset_pass_manager(backend=backend, optimization_level=1)
+    sampler = Sampler(backend)
+    job     = sampler.run(pm.run(circuits), shots=3)
+    print(f"  Job ID : {job.job_id()}")
+    print(f"  Waiting...")
+
+    start   = time.time()
+    result  = job.result()
+    elapsed = round(time.time() - start, 1)
+    print(f"  Done in {elapsed}s!")
+    print()
+
+    decrypted_bits = []
+    for pub_result in result:
+        counts = pub_result.data.c.get_counts()
+        decrypted_bits.append(int(max(counts, key=counts.get)))
+
+    chars = []
+    for i in range(0, len(decrypted_bits), 8):
+        byte_bits = decrypted_bits[i:i+8]
+        if len(byte_bits) == 8:
+            val = int(''.join(map(str, byte_bits)), 2)
+            chars.append(chr(val) if 32 <= val <= 126 else '?')
+
+    decrypted_text = ''.join(chars)
+
+    print(f"  Decrypted bits : {''.join(map(str, decrypted_bits))}")
+    print(f"  Decrypted text : \"{decrypted_text}\"")
+    print()
+    print("  Decryption complete!")
+    print("=" * 55)
+
+    return decrypted_text
+
+print("✅ Decryption function ready!")
+
+#Cell 7 - Run It
+
+# ✏️ Change this to your message
+MESSAGE = "AEXA"
+
+print(f"Machine : {backend.name}")
+print(f"Message : \"{MESSAGE}\"")
+print()
+
+encrypted_bits, original_bits, enc_job_id = quantum_encrypt(
+    MESSAGE, QUANTUM_GATE_KEY, backend, max_chars=len(MESSAGE)
+)
+
+print()
+
+decrypted_text = quantum_decrypt(encrypted_bits, QUANTUM_GATE_KEY, backend)
+
+print()
+print("FINAL RESULT")
+print("=" * 50)
+print(f"Original  : \"{MESSAGE}\"")
+print(f"Encrypted : {hex(int(''.join(map(str, encrypted_bits)), 2))}")
+print(f"Decrypted : \"{decrypted_text}\"")
+print(f"Machine   : {backend.name}")
+print(f"Job proof : {enc_job_id}")
+print("=" * 50)
+
+#Cell 8 - Encrypt a full document
+
+# ✏️ Change this to your document
+DOCUMENT = "AEXA TECH 2026"
+
+chunks = [DOCUMENT[i:i+4] for i in range(0, len(DOCUMENT), 4)]
+all_encrypted = []
+
+for idx, chunk in enumerate(chunks):
+    print(f"Chunk {idx+1}/{len(chunks)}: \"{chunk}\"")
+    enc_bits, _, job_id = quantum_encrypt(
+        chunk, QUANTUM_GATE_KEY, backend, max_chars=4
+    )
+    all_encrypted.append({
+        'chunk': chunk,
+        'encrypted': enc_bits,
+        'job_id': job_id
+    })
+    print()
+
+print("=" * 55)
+print("ENCRYPTED DOCUMENT")
+print("=" * 55)
+for i, item in enumerate(all_encrypted):
+    enc_hex = hex(int(''.join(map(str, item['encrypted'])), 2))
+    print(f"  \"{item['chunk']}\" -> {enc_hex}")
+    print(f"   Job: {item['job_id']}")
+print("=" * 55)
+print(f"Done! {len(chunks)} quantum jobs ran on {backend.name}")
+
+
+
